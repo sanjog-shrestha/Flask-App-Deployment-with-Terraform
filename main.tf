@@ -1,3 +1,4 @@
+# Terraform block: Specifies required providers for this configuration.
 terraform {
     required_providers {
       aws = {
@@ -12,9 +13,12 @@ terraform {
     }
 }
 
+# Security Group resource: Allows inbound traffic on port 5000 (Flask) and port 22 (SSH) from anywhere,
+# and permits all outbound traffic.
 resource "aws_security_group" "flask_sg" {
     name = "flask_security_group"
 
+    # Allow inbound traffic to Flask app on port 5000 from any IP
     ingress {
         from_port = 5000
         to_port = 5000
@@ -22,6 +26,7 @@ resource "aws_security_group" "flask_sg" {
         cidr_blocks = ["0.0.0.0/0"]
     }
 
+    # Allow inbound SSH access on port 22 from any IP (should ideally be restricted)
     ingress {
         from_port = 22
         to_port = 22
@@ -29,6 +34,7 @@ resource "aws_security_group" "flask_sg" {
         cidr_blocks = ["0.0.0.0/0"]
     }
 
+    # Allow all outbound traffic
     egress {
         from_port = 0
         to_port = 0
@@ -37,22 +43,26 @@ resource "aws_security_group" "flask_sg" {
     }
 }
 
+# TLS Private Key resource: Generates a local RSA private key to be used for EC2 SSH access.
 resource "tls_private_key" "terraform_key" {
     algorithm = "RSA"
     rsa_bits = 4096
 }
 
+# AWS Key Pair resource: Registers the generated public key with AWS as an EC2 key pair.
 resource "aws_key_pair" "generated_key" {
     key_name   = "terraform-key"
     public_key = tls_private_key.terraform_key.public_key_openssh
 }
 
+# Local file resource: Stores the generated private key securely on disk for SSH access.
 resource "local_file" "private_key" {
     content         = tls_private_key.terraform_key.private_key_pem
     filename        = "terraform-key.pem"
     file_permission = "0600"
 }
 
+# EC2 Instance resource: Provisions an Ubuntu VM, attaches security group, key, and provisions the Flask app.
 resource "aws_instance" "flask_server" {
     ami               = var.ami_id
     instance_type     = var.instance_type
@@ -63,7 +73,7 @@ resource "aws_instance" "flask_server" {
         Name = "Flask-Terraform-Server"
     }
 
-    # Wait for SSH to become available before running provisioners.
+    # Remote-exec provisioner: Waits for SSH to become available before executing further setup.
     provisioner "remote-exec" {
         inline = [
             "echo 'Waiting for SSH...'",
@@ -78,6 +88,7 @@ resource "aws_instance" "flask_server" {
         }
     }
 
+    # File provisioner: Uploads app.py from the local system to the instance's home directory.
     provisioner "file" {
         source      = "app/app.py"
         destination = "/home/ubuntu/app.py"
@@ -91,20 +102,21 @@ resource "aws_instance" "flask_server" {
         }
     }
 
-    # Run Flask app automatically after setup
+    # Remote-exec provisioner: Sets up Python environment and systemd service to run the Flask app on boot.
     provisioner "remote-exec" {
         inline = [
+            # Update package list and install necessary Python packages
             "sudo apt-get update",
             "sudo apt-get install -y python3-pip python3-venv python3-full",
-            # Create and activate virtual environment
+            # Create and activate virtual environment for Flask
             "python3 -m venv /home/ubuntu/flask-env",
             # Install Flask in the virtual environment
             "/home/ubuntu/flask-env/bin/pip install flask",
-            # Change permissions to allow execution if needed
+            # Ensure the app.py script is executable
             "chmod +x /home/ubuntu/app.py",
-            # Ensure no previous python process is running on port 5000
+            # Kill any process that might be using port 5000 (Flask default)
             "sudo fuser -k 5000/tcp || true",
-            # Run the Flask app using the virtual environment's python as a background systemd service so it survives reboots and auto starts
+            # Create systemd service unit file for Flask app
             "echo '[Unit]' | sudo tee /etc/systemd/system/flask-app.service",
             "echo 'Description=Flask App Auto Start' | sudo tee -a /etc/systemd/system/flask-app.service",
             "echo '[Service]' | sudo tee -a /etc/systemd/system/flask-app.service",
@@ -114,6 +126,7 @@ resource "aws_instance" "flask_server" {
             "echo 'Restart=always' | sudo tee -a /etc/systemd/system/flask-app.service",
             "echo '[Install]' | sudo tee -a /etc/systemd/system/flask-app.service",
             "echo 'WantedBy=multi-user.target' | sudo tee -a /etc/systemd/system/flask-app.service",
+            # Reload systemd, enable and start the Flask app service
             "sudo systemctl daemon-reload",
             "sudo systemctl enable flask-app",
             "sudo systemctl start flask-app"
