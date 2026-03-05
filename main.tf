@@ -13,6 +13,14 @@ terraform {
     }
 }
 
+locals {
+  common_tags = {
+    Project     = "Flask-Terraform-Example"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+  }
+}
+
 # Security Group resource: Allows inbound traffic on port 5000 (Flask) and port 22 (SSH) from anywhere,
 # and permits all outbound traffic.
 resource "aws_security_group" "flask_sg" {
@@ -41,18 +49,33 @@ resource "aws_security_group" "flask_sg" {
         protocol = "-1"
         cidr_blocks = ["0.0.0.0/0"]
     }
+
+    tags = merge(
+      local.common_tags,
+      {
+        Name = "Flask-Security-Group"
+      }
+    )
 }
 
 # TLS Private Key resource: Generates a local RSA private key to be used for EC2 SSH access.
 resource "tls_private_key" "terraform_key" {
     algorithm = "RSA"
     rsa_bits = 4096
+    # No tags for TLS local resource
 }
 
 # AWS Key Pair resource: Registers the generated public key with AWS as an EC2 key pair.
 resource "aws_key_pair" "generated_key" {
     key_name   = "terraform-key"
     public_key = tls_private_key.terraform_key.public_key_openssh
+
+    tags = merge(
+      local.common_tags,
+      {
+        Name = "Flask-Terraform-Key"
+      }
+    )
 }
 
 # Local file resource: Stores the generated private key securely on disk for SSH access.
@@ -60,6 +83,7 @@ resource "local_file" "private_key" {
     content         = tls_private_key.terraform_key.private_key_pem
     filename        = "terraform-key.pem"
     file_permission = "0600"
+    # No tags for local file resource
 }
 
 # EC2 Instance resource: Provisions an Ubuntu VM, attaches security group, key, and provisions the Flask app.
@@ -69,9 +93,12 @@ resource "aws_instance" "flask_server" {
     security_groups   = [aws_security_group.flask_sg.name]
     key_name          = aws_key_pair.generated_key.key_name
 
-    tags = {
+    tags = merge(
+      local.common_tags,
+      {
         Name = "Flask-Terraform-Server"
-    }
+      }
+    )
 
     # Remote-exec provisioner: Waits for SSH to become available before executing further setup.
     provisioner "remote-exec" {
