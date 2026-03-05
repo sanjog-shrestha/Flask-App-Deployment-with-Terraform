@@ -31,7 +31,8 @@ EC2 Instance (Ubuntu)
 ```
 
 > 📸 **Architecture Screenshot:**
-> ![Architecture](./screenshots/architecture.png)
+<img width="1024" height="1536" alt="image" src="https://github.com/user-attachments/assets/0f79c4d8-208e-4482-bc7a-5fc62b1e8a83" />
+
 
 ---
 
@@ -48,7 +49,7 @@ EC2 Instance (Ubuntu)
 | Systemd Service | `flask-app.service` — starts on boot, restarts on failure |
 
 > 📸 **AWS Console Screenshot:**
-> ![AWS Console](./screenshots/aws-console.png)
+<img width="1617" height="671" alt="image" src="https://github.com/user-attachments/assets/e827e7a3-ca54-4f0d-ba41-af6058d2f159" />
 
 ---
 
@@ -147,7 +148,8 @@ public_ip = "xx.xx.xx.xx"
 ```
 
 > 📸 **Deployment Screenshot:**
-> ![Deployment Output](./screenshots/deployment-output.png)
+<img width="795" height="438" alt="image" src="https://github.com/user-attachments/assets/31e6f8d2-c8de-402a-ae7e-2bffb039b1b9" />
+
 
 ---
 
@@ -163,7 +165,7 @@ http://<public-ip>:5000
 3. Verify the Flask application loads successfully
 
 > 📸 **App Screenshot:**
-> ![Live App](./screenshots/app-live.png)
+<img width="1918" height="1012" alt="image" src="https://github.com/user-attachments/assets/0ad23b0b-690f-42a5-acf8-08a9f76fad5a" />
 
 ---
 
