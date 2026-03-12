@@ -2,16 +2,16 @@
 
 ## 📌 Overview
 
-This project demonstrates how to deploy a **Flask web application** on an **AWS EC2** instance using **HashiCorp Terraform** Infrastructure as Code (IaC).
-
+This project demonstrates how to deploy a Flask web application on an AWS EC2 instance using HashiCorp Terraform Infrastructure as Code (IaC).
 Terraform provisions and configures all required AWS resources automatically — including SSH key generation, security groups, and a self-healing systemd service — enabling repeatable and version-controlled application deployments.
-
 The infrastructure includes:
+
 - AWS EC2 instance (Ubuntu)
 - Security group with Flask and SSH access
 - Auto-generated RSA key pair
 - Python virtual environment setup
 - Systemd service for auto-start on reboot
+- Terraform Cloud remote state with workspace locking
 
 This project highlights cloud automation, remote provisioning, and DevOps deployment practices.
 
@@ -88,7 +88,40 @@ Terraform generates an RSA 4096-bit key pair at apply time using the `tls` provi
 Terraform uses `remote-exec` and `file` provisioners to:
 - Upload `app.py` to the server
 - Install Python 3, pip, and venv
-- Configure and start a **systemd service** that keeps Flask running across reboots
+- Configure and start a **systemd service** that keeps Flask running across reboots'
+
+**4️⃣ Terraform Cloud Remote State **
+Terraform state is stored remotely in HashiCorp Terraform Cloud instead of a local terraform.tfstate file.
+This is configured via the cloud {} block inside the terraform {} block in main.tf:
+     terraform {
+         cloud {
+             workspaces {
+                 name = "flask-ec2-dev"
+             }
+         }
+     
+         required_providers {
+             aws   = { source = "hashicorp/aws" }
+             tls   = { source = "hashicorp/tls" }
+             local = { source = "hashicorp/local" }
+         }
+     }
+The organisation name is intentionally omitted from the file and supplied via an environment variable to avoid hardcoding it in version control:
+**macOS / Linux:**
+
+     export TF_CLOUD_ORGANIZATION="your-org-name"
+**Windows (PowerShell):**
+
+    $env:TF_CLOUD_ORGANIZATION="your-org-name"
+     
+**To persist across all future PowerShell sessions on Windows:**
+         
+          [System.Environment]::SetEnvironmentVariable("TF_CLOUD_ORGANIZATION", "your-org-name", "User")
+
+> 📸 Terraform Cloud Workspace Screenshot:
+
+<img width="1918" height="827" alt="image" src="https://github.com/user-attachments/assets/6d2ff48b-e6b8-43f2-ab3f-2c1cabf6e085" />
+
 
 ---
 
