@@ -214,10 +214,12 @@ http://<public-ip>:5000
 ## 🔐 Security Notes
 
 - `terraform-key.pem` is auto-generated locally. **Never commit it to version control.**
+- The TF_CLOUD_ORGANIZATION environment variable keeps your org name out of source code.
 - Add the following to your `.gitignore`:
 ```
 terraform-key.pem
 .terraform/
+.terraform.lock.hcl
 terraform.tfstate
 terraform.tfstate.backup
 ```
@@ -231,6 +233,7 @@ terraform.tfstate.backup
 |---|---|
 | Application Hosting | Amazon EC2 (Ubuntu) |
 | Infrastructure Provisioning | Terraform |
+| Remote State | Terraform Cloud |
 | Key Management | Terraform TLS Provider |
 | Process Management | Linux systemd |
 | Authentication | AWS CLI |
@@ -243,6 +246,7 @@ terraform.tfstate.backup
 - Terraform AWS + TLS + Local provider usage
 - Infrastructure as Code principles
 - Remote provisioning via SSH
+- Terraform Cloud remote state and workspace locking
 - Python virtual environment management
 - Systemd service configuration
 - Cloud security group configuration
@@ -258,6 +262,7 @@ This project demonstrates the ability to:
 - Structure Terraform configurations effectively
 - Implement auto-healing services with systemd
 - Manage SSH keys programmatically through IaC
+- Configure Terraform Cloud remote state for team-ready, CI/CD-ready deployments
 
 ---
 
@@ -269,7 +274,6 @@ Potential enhancements:
 - [ ] HTTPS using AWS Certificate Manager
 - [ ] Custom domain with Route 53
 - [ ] CI/CD pipeline with GitHub Actions
-- [ ] Terraform remote state with S3 + DynamoDB
 - [ ] Auto Scaling Group for high availability
 - [ ] CloudWatch monitoring and alerting
 - [ ] Replace provisioners with Packer AMI baking
