@@ -121,6 +121,15 @@ The organisation name is intentionally omitted from the file and supplied via an
 > 📸 Terraform Cloud Workspace Screenshot:
 
 <img width="1918" height="827" alt="image" src="https://github.com/user-attachments/assets/6d2ff48b-e6b8-43f2-ab3f-2c1cabf6e085" />
+<br>
+<br>
+
+|  | Before | After |
+|---|---|---|
+| State location | Aterraform.tfstate on local disk | Terraform Cloud (flask-ec2-dev workspace) 
+| State locking | None | Automatic — concurrent runs are blocked |
+| State history | Lost on accidental delete | Full version history in Terraform Cloud UI | 
+| CI/CD ready| No | Yes — any runner with a token can access it
 
 
 ---
