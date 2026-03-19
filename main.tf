@@ -1,3 +1,12 @@
+# Flask + AWS infrastructure definition.
+#
+# This configuration provisions:
+# - An EC2 instance that installs and runs a Flask app via `systemd`
+# - An internet-facing Application Load Balancer (ALB) with a listener
+# - Security groups to control inbound traffic to the ALB and EC2 instance
+#
+# VPC and subnet configuration created below (not provided via variables).
+
 # Terraform block: Global Terraform settings (remote state + provider requirements).
 terraform {
   # Terraform Cloud settings: which org/workspace stores state and runs.
@@ -29,17 +38,99 @@ locals {
   }
 }
 
+# VPC resource
+resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = merge(local.common_tags, { Name = "Flask-VPC" })
+}
+
+# Internet Gateway for the VPC
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+  tags   = merge(local.common_tags, { Name = "Flask-IGW" })
+}
+
+# Two public subnets in different AZs for ALB high-availability
+resource "aws_subnet" "public_a" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = true
+  tags = merge(local.common_tags, { Name = "Flask-Public-Subnet-A" })
+}
+
+resource "aws_subnet" "public_b" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = data.aws_availability_zones.available.names[1]
+  map_public_ip_on_launch = true
+  tags = merge(local.common_tags, { Name = "Flask-Public-Subnet-B" })
+}
+
+# Data source for availability zones
+data "aws_availability_zones" "available" {}
+
+# Public route table
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+  tags = merge(local.common_tags, { Name = "Flask-Public-RT" })
+}
+
+# Route table associations for the public subnets
+resource "aws_route_table_association" "a" {
+  subnet_id      = aws_subnet.public_a.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "b" {
+  subnet_id      = aws_subnet.public_b.id
+  route_table_id = aws_route_table.public.id
+}
+
+# Security group for the public Application Load Balancer (ALB).
+# Allows inbound HTTP (port 80) and all outbound traffic.
+resource "aws_security_group" "alb_sg" {
+  name        = "alb_security_group"
+  description = "Allow HTTP inbound to ALB from the internet"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, { Name = "ALB-Security-Group" })
+}
 # Security Group resource: Allows inbound traffic on port 5000 (Flask) and port 22 (SSH) from anywhere,
 # and permits all outbound traffic.
 resource "aws_security_group" "flask_sg" {
-  name = "flask_security_group"
+  name        = "flask_security_group"
+  description = "Allow Flask Traffic from ALB & SSH from anywhere"
+  vpc_id      = aws_vpc.main.id
 
-  # Allow inbound traffic to Flask app on port 5000 from any IP
+  # Allow inbound traffic to Flask app on port 5000 only from ALB SG
   ingress {
-    from_port   = 5000
-    to_port     = 5000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = 5000
+    to_port         = 5000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
   }
 
   # Allow inbound SSH access on port 22 from any IP (should ideally be restricted)
@@ -96,10 +187,12 @@ resource "local_file" "private_key" {
 
 # EC2 Instance resource: Provisions an Ubuntu VM, attaches security group, key, and provisions the Flask app.
 resource "aws_instance" "flask_server" {
-  ami             = var.ami_id
-  instance_type   = var.instance_type
-  security_groups = [aws_security_group.flask_sg.name]
-  key_name        = aws_key_pair.generated_key.key_name
+  ami                    = var.ami_id
+  instance_type          = var.instance_type
+  vpc_security_group_ids = [aws_security_group.flask_sg.id]
+  key_name               = aws_key_pair.generated_key.key_name
+  # Place EC2 in the first public subnet
+  subnet_id              = aws_subnet.public_a.id
 
   tags = merge(
     local.common_tags,
@@ -177,4 +270,57 @@ resource "aws_instance" "flask_server" {
       timeout     = "5m"
     }
   }
+}
+
+# Internet-facing Application Load Balancer.
+resource "aws_lb" "flask_alb" {
+  name                       = "flask-alb"
+  internal                   = false
+  load_balancer_type         = "application"
+  security_groups            = [aws_security_group.alb_sg.id]
+  subnets                    = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+  enable_deletion_protection = false
+  tags                       = merge(local.common_tags, { Name = "Flask-ALB" })
+}
+
+# Target group that routes traffic to the EC2 instance on port 5000.
+resource "aws_lb_target_group" "flask_tg" {
+  name     = "flask-target-group"
+  port     = 5000
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTP"
+    port                = "5000"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    matcher             = "200"
+  }
+
+  tags = merge(local.common_tags, { Name = "Flask-Target-Group" })
+}
+
+# Attach the EC2 instance to the target group.
+resource "aws_lb_target_group_attachment" "flask_tg_attachment" {
+  target_group_arn = aws_lb_target_group.flask_tg.arn
+  target_id        = aws_instance.flask_server.id
+  port             = 5000
+}
+
+# ALB listener that forwards incoming HTTP (port 80) to the target group.
+resource "aws_lb_listener" "flask_listener" {
+  load_balancer_arn = aws_lb.flask_alb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.flask_tg.arn
+  }
+
+  tags = merge(local.common_tags, { Name = "Flask-ALB-Listener" })
 }
