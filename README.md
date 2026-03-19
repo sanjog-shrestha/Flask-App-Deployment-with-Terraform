@@ -34,7 +34,8 @@ EC2 Instance (flask_sg — Ubuntu)
 ```
 
 > 📸 **Architecture Screenshot:**
-<img width="1024" height="1536" alt="image" src="https://github.com/user-attachments/assets/0f79c4d8-208e-4482-bc7a-5fc62b1e8a83" />
+<img width="1024" height="1536" alt="image" src="https://github.com/user-attachments/assets/cd053ec9-bd9c-4b4f-8f6e-6540eb6a9568" />
+
 
 ---
 
@@ -163,6 +164,9 @@ Key ALB components provisioned by Terraform:
 | `aws_lb_target_group` | HTTP:5000, health check on `/` every 30s |
 | `aws_lb_target_group_attachment` | Registers the EC2 instance as a target |
 | `aws_lb_listener` | Port 80 — forwards to target group |
+
+<img width="1915" height="458" alt="image" src="https://github.com/user-attachments/assets/986a66be-8176-4bf5-8a1f-9fbd64ef333d" />
+
 
 ### 6️⃣ Custom VPC & Networking
 
